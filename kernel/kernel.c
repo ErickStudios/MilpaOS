@@ -37,8 +37,8 @@ void proc2() {
 
         if (xd != INVALID_MSG_ID) {
             vprintk("recived\n");
+            respond_msg(xd, 0);
         }
-        respond_msg(xd, 0);
     }
 }
 
@@ -116,6 +116,8 @@ void c_main(abstract_t magic, abstract_t mbi_addr) {
 
     init_heap();
     remap_pic();
+
+    init_msg_server();
 
     idt_set_gate(32, (abstract_t)isr_pit, 0x10, 0x8E);
     idt_install();

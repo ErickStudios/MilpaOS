@@ -35,13 +35,13 @@ msghandler_t request_msg(const msgname_t nam, abstract_t dat) {
     for (abstract_t i = 0; i < MAX_MSGS_INTERNAL; i++)
     {
         if (!msgs[i].inuse) {
-            msgs[i].inuse = true;
             char* nm = nam;
             char* nm2 = msgs[i].ident;
             memcpy(nm2, nm, sizeof(msgname_t));
 
             msgs[i].param = dat;
             msgs[i].commingval = false;
+            msgs[i].inuse = true;
 
             return i;
         }
@@ -61,10 +61,13 @@ abstract_t join_msg(msghandler_t h) {
 msghandler_t findfirst_msg(const msgname_t nam) {
     for (abstract_t i = 0; i < MAX_MSGS_INTERNAL; i++)
     {
+        if (!msgs[i].inuse) continue;
+        if (msgs[i].commingval) continue;
+
         char* s1 = msgs[i].ident;
         char* s2 = nam;
 
-        if (msgs[i].inuse != false && !strcmp(s1, s2)) {
+        if (msgs[i].inuse == true && !strcmp(s1, s2)) {
             return i;
         }
     }
