@@ -3,6 +3,13 @@
 #define PIC2_COMMAND 0xA0
 #define PIC2_DATA    0xA1
 
+static void pic_unmask_irq1(void) {
+    uabssmall_t imr = inb(0x21);      // PIC maestro
+    outb(0x21, imr & ~0x01);      // desmascara bit 1 (IRQ1)
+}
+
+extern void isr_pit();
+
 void remap_pic() {
     outb(0x20, 0x11); // PIC maestro
     outb(0xA0, 0x11); // PIC esclavo
@@ -38,9 +45,11 @@ volatile abstract_t system_ticks = 0;
 #include "regs.h"
 
 #define MAX_BG_PROCESS 50
+#define ROWS_OF_VIRT 26
+#define COLS_OF_VIRT 20
 
 typedef struct {
-    abslittl_t buf[15*7];
+    abslittl_t buf[ROWS_OF_VIRT*COLS_OF_VIRT];
     abstract_t row;
     abstract_t column;
     uabssmall_t color;
@@ -75,27 +84,27 @@ void syscall(regs_t* r) {
 Process* proalloc(abstract_t fn) {
     for (int i = 0; i < MAX_BG_PROCESS; i++) {
         if (stats[i].free == 0) {
-            abstract_t* sp = (abstract_t*)&stats[i].stack[512];
-            
+            abstract_t* sp = (abstract_t*)((abstract_t)&stats[i].stack[512] & ~0xF);
+
             *(--sp) = 0x202;
-            *(--sp) = 0x08;
+            *(--sp) = 0x10;
             *(--sp) = fn;
 
             for (int j = 0; j < 8; j++) {
                 *(--sp) = 0; 
             }
 
-            *(--sp) = 0x10;
-            *(--sp) = 0x10;
-            *(--sp) = 0x10;
-            *(--sp) = 0x10;
+            *(--sp) = 0x18;
+            *(--sp) = 0x18;
+            *(--sp) = 0x18;
+            *(--sp) = 0x18;
 
             stats[i].stats.esp = (abstract_t)sp;
 
-            stats[i].virtus.color = 0x0F;
+            stats[i].virtus.color = 0x1F;
             stats[i].virtus.column = 0;
             stats[i].virtus.row = 0;
-            for(int j=0; j<15*7; j++) stats[i].virtus.buf[j] = 0x0020;
+            for(int j=0; j<ROWS_OF_VIRT*COLS_OF_VIRT; j++) stats[i].virtus.buf[j] = 0x0020;
 
             stats[i].free = 1;
             return &stats[i];

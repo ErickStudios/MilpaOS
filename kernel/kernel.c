@@ -1,61 +1,29 @@
 #include "../lib/abstract.h"
+#include "../lib/stdlib.h"
 #include "heap.h"
 #include "pipe.h"
 #include "ports.h"
 #include "keyio.h"
 #include "idt.h"
 #include "pic.h"
+#include "termdef.h"
+#include "multibt.h"
 #include "vga.h"
 #include "disk.h"
-
-void __stack_chk_fail_local()
-{
-    while (1)
-    {
-        __asm__("cli");
-        __asm__("hlt");
-    }
-}
-
-void __stack_chk_fail()
-{
-    __stack_chk_fail_local();
-}
-
-extern void isr_pit();
-
-abstract_t readl(char *ot)
-{
-    abstract_t it = 0;
-    while (true)
-    {
-        char ky = getc();
-        putc(ky);
-        if (ky == '\b')
-        {
-            ot[it--] = 0;
-        }
-        else if (ky == '\n')
-        {
-            ot[it] = 0;
-            return it;
-        }
-        else
-        {
-            ot[it++] = ky;
-        }
-    }
-
-    return 0;
-}
-
-static void pic_unmask_irq1(void) {
-    uabssmall_t imr = inb(0x21);      // PIC maestro
-    outb(0x21, imr & ~0x01);      // desmascara bit 1 (IRQ1)
-}
+#include "font.h"
+#include "stackfall.h"
+#include "termios.h"
+#include "mouse.h"
+#include "gafas.h"
+#include "msg.h"
 
 void proc1() {
     vprintk("hello world\n");
+    msghandler_t abc = request_msg("test1_fi", 0);
+    vprintk("sended\n");
+    join_msg(abc);
+    vprintk("responded\n");
+
     while (1) {
         char ky = getc();
         vputc(ky);
@@ -64,17 +32,28 @@ void proc1() {
 
 void proc2() {
     vprintk("foo bar\n");
-    while (1);
+    while (1) {
+        msghandler_t xd = findfirst_msg("test1_fi");
+
+        if (xd != INVALID_MSG_ID) {
+            vprintk("recived\n");
+        }
+        respond_msg(xd, 0);
+    }
 }
 
 void render() {
+    abstract_t* fb =(abstract_t*)back_buffer;
+
+    for (abstract_t i = 0; i < (globInf->framebuffer_height*globInf->framebuffer_width); i++)
+    {
+        fb[i] = 0x00008888;
+    }
+
     terminal_column = 0;
     terminal_row = 0;
 
-    for (int i = 0; i < 80*25; i++)
-    {
-        terminal_buffer[i] = 0x1E20;
-    }
+    terminal_color = 0x9E;
 
     printk("Welcome to the MilpaOS kernel, this is the multiple virtual terminal desktop worckspace\n");
 
@@ -86,19 +65,28 @@ void render() {
     for (int i = 0; i < MAX_BG_PROCESS; i++)
     {
         if (stats[i].free == 1) {
-            int x = 5 + (i * 17);
+            int x = 5 + (i * (ROWS_OF_VIRT + 3));
             int y = 5;
             // stats[i].virtus.buf = 15*7 buf
 
-            int w = 15;
-            int h = 7;
+            int w = ROWS_OF_VIRT;
+            int h = COLS_OF_VIRT;
             
             int vrt_i = 0;
+
+            for (int sy = (y - 1); sy < (y + h + 1); sy++)
+            {
+                for (int sx = (x - 1); sx < (x + w + 1); sx++)
+                {
+                    writeTermBuffer(sx, sy, 0x2020);
+                }
+            }
+
             for (int sy = y; sy < (y + h); sy++)
             {
                 for (int sx = x; sx < (x + w); sx++)
                 {
-                    terminal_buffer[sy*80+sx] = stats[i].virtus.buf[vrt_i];
+                    writeTermBuffer(sx, sy, stats[i].virtus.buf[vrt_i]);
                     vrt_i++;
                 }
             }
@@ -108,16 +96,31 @@ void render() {
 
 void proc0() {
     while (true) {
-        render();
+        //render();
     }
 }
 
-void c_main() {
+void c_main(abstract_t magic, abstract_t mbi_addr) {
+    multiboot_info_t *mbi =
+        (multiboot_info_t *)mbi_addr;
+
+    if (magic != 0x2BADB002)
+        return;
+
+    if (!(mbi->flags & (1 << 12)))
+        return;
+
+    globInf = mbi;
+
+    initTerm();
+
     init_heap();
     remap_pic();
 
-    idt_set_gate(32, (abstract_t)isr_pit, 0x08, 0x8E);
+    idt_set_gate(32, (abstract_t)isr_pit, 0x10, 0x8E);
     idt_install();
+
+    init_backbuffer();
 
     running_proc = 0;
     for (int i = 0; i < MAX_BG_PROCESS; i++)
@@ -129,11 +132,14 @@ void c_main() {
     proalloc((abstract_t)&proc1);
     proalloc((abstract_t)&proc2);
 
+    init_mouse();
+
     init_pit(50);
-    
+
     asm volatile("sti");
 
     while (true) {
         render();
+        popback();
     }
 }

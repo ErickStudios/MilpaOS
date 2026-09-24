@@ -26,6 +26,7 @@ SECTIONS
     {
         __kstack_start = .;
         . = . + 0x4000;
+        . = ALIGN(4);
         __kstack_end = .;
     }
 

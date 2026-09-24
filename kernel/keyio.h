@@ -18,7 +18,10 @@ static unsigned char shift_pressed = 0;
 
 char getc() {
     while (1) {
-        if (inb(0x64) & 0x01) {
+        unsigned char status = inb(0x64);
+
+
+        if ((status & 0x01) && (!(status & 0x20))) {
             uabssmall_t scancode = inb(0x60);
 
             if (scancode == 0x2A || scancode == 0x36) {
