@@ -25,6 +25,24 @@ abstract_t vgatxt_to_rgb(abssmall_t c) {
     
 }
 
+void drawRectangle(int x, int y, int w, int h, abstract_t clr) {
+    abstract_t* fb = (abstract_t*)back_buffer;
+    abstract_t pitch32 = globInf->framebuffer_pitch / 4;
+
+    if (x < 0) { w += x; x = 0; }
+    if (y < 0) { h += y; y = 0; }
+    if (x + w > 800) w = 800 - x;
+    if (y + h > 600) h = 600 - y;
+    if (w <= 0 || h <= 0) return;
+
+    for (int row = 0; row < h; row++) {
+        abstract_t* line = fb + (y + row) * pitch32 + x;
+        for (int col = 0; col < w; col++) {
+            line[col] = clr;
+        }
+    }
+}
+
 void writeTermBuffer(abstract_t x, abstract_t y, abslittl_t chr) {
     abstract_t* fb =(abstract_t*)back_buffer;
     abstract_t pitch = globInf->framebuffer_pitch;
@@ -55,20 +73,31 @@ void vtty_scroll() {
 }
 
 void tty_scroll() {
-    unsigned int *fb = (unsigned int *) globInf->framebuffer_addr;
-    int width = globInf->framebuffer_width;
-    int height = globInf->framebuffer_height;
-    int font_height = 8;
-    
-    int total_pixels = width * (height - font_height);
-    int shift = width * font_height;
+    abstract_t* fb = (abstract_t*)back_buffer;
+    abstract_t width = globInf->framebuffer_width;
+    abstract_t height = globInf->framebuffer_height;
+    abstract_t pitch_dwords = globInf->framebuffer_pitch / 4;
+    int fh = 8;
 
-    for (int i = 0; i < total_pixels; i++) {
-        fb[i] = fb[i + shift];
+    for (abstract_t y = 0; y < height - fh; y++) {
+        for (abstract_t x = 0; x < width; x++) {
+            fb[y * pitch_dwords + x] = fb[(y+fh) * pitch_dwords + x];
+        }
     }
 
-    for (int i = total_pixels; i < width * height; i++) {
-        fb[i] = 0x000000;
+    abstract_t absa = vgatxt_to_rgb(terminal_color >> 4);
+
+    for (abstract_t y = height - fh; y < height; y++) {
+        for (abstract_t x = 0; x < width; x++) {
+            fb[y * pitch_dwords + x] = absa;
+        }
+    }
+
+    abstract_t* real = (abstract_t*)globInf->framebuffer_addr;
+    for (abstract_t y = 0; y < height; y++) {
+        for (abstract_t x = 0; x < width; x++) {
+            real[y * pitch_dwords + x] = fb[y * pitch_dwords + x];
+        }
     }
 }
 

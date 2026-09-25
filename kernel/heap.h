@@ -23,6 +23,25 @@ void init_heap() {
     initial_block->next = 0;
 }
 
+void free(void* ptr) {
+    if (!ptr) return;
+
+    block_meta_t* block = (block_meta_t*)ptr - 1;
+    block->free = 1;
+
+    // junta con todos los libres contiguos
+    block_meta_t* cur = (block_meta_t*)heap_start_addr;
+    while (cur && cur->next) {
+        if (cur->free && cur->next->free) {
+            cur->size += META_SIZE + cur->next->size;
+            cur->next = cur->next->next;
+            // no avances, puede haber otro libre después
+            continue;
+        }
+        cur = cur->next;
+    }
+}
+
 void* malloc(abstract_t size) {
     if (size <= 0) return 0;
 

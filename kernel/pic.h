@@ -3,6 +3,8 @@
 #define PIC2_COMMAND 0xA0
 #define PIC2_DATA    0xA1
 
+#include "../lib/stdlib.h"
+
 static void pic_unmask_irq1(void) {
     uabssmall_t imr = inb(0x21);      // PIC maestro
     outb(0x21, imr & ~0x01);      // desmascara bit 1 (IRQ1)
@@ -60,6 +62,7 @@ typedef struct {
     regs_t stats;
     bool_t free;
     VirtTerm virtus;
+    VirtusTermController vrt;
 } Process;
 
 Process stats[MAX_BG_PROCESS];
@@ -85,7 +88,9 @@ Process* proalloc(abstract_t fn) {
     for (int i = 0; i < MAX_BG_PROCESS; i++) {
         if (stats[i].free == 0) {
             abstract_t* sp = (abstract_t*)((abstract_t)&stats[i].stack[512] & ~0xF);
-
+            
+            *(--sp) = (abstract_t)globKserv;
+            *(--sp) = (abstract_t)globKserv;
             *(--sp) = 0x202;
             *(--sp) = 0x10;
             *(--sp) = fn;
@@ -100,6 +105,10 @@ Process* proalloc(abstract_t fn) {
             *(--sp) = 0x18;
 
             stats[i].stats.esp = (abstract_t)sp;
+
+            stats[i].vrt.color = &stats[i].virtus.color;
+            stats[i].vrt.column = &stats[i].virtus.column;
+            stats[i].vrt.row = &stats[i].virtus.row;
 
             stats[i].virtus.color = 0x1F;
             stats[i].virtus.column = 0;
@@ -137,6 +146,8 @@ abstract_t pit_handler(regs_t* x) {
 
     running_proc = next_proc;
     Process* next = &stats[running_proc];
+
+    globKserv->structCon = next->vrt;
 
     outb(0x20, 0x20);
 

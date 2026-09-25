@@ -1,4 +1,7 @@
 #include "../lib/str.h"
+#include "../lib/stdlib.h"
+
+server_t* globKserv;
 
 /**
 // all about of messages
@@ -9,6 +12,7 @@ typedef msghandler_t (*requestfn_t)(const msgname_t, abstract_t);
 typedef abstract_t (*joinmsgfn_t)(msghandler_t);
 typedef msghandler_t (*findfirst_t)(const msgname_t);
 typedef void (*respondfn_t)(msghandler_t, abstract_t);
+typedef abstract_t (*fetchrequestfn_t)(msghandler_t);
 
 request("apple foo", 0);
  */
@@ -70,6 +74,12 @@ msghandler_t findfirst_msg(const msgname_t nam) {
         if (msgs[i].inuse == true && !strcmp(s1, s2)) {
             return i;
         }
+    }
+    return 0xFFFFFFFF;
+}
+abstract_t getparam_msg(msghandler_t handler) {
+    if (handler != 0xFFFFFFFF) {
+        return msgs[handler].param;
     }
     return 0xFFFFFFFF;
 }

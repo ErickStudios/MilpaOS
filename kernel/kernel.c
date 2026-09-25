@@ -5,6 +5,7 @@
 #include "ports.h"
 #include "keyio.h"
 #include "idt.h"
+#include "msg.h"
 #include "pic.h"
 #include "termdef.h"
 #include "multibt.h"
@@ -15,90 +16,60 @@
 #include "termios.h"
 #include "mouse.h"
 #include "gafas.h"
-#include "msg.h"
+#include "fstraps.h"
+#include "server.h"
+#include "gui.h"
 
-void proc1() {
-    vprintk("hello world\n");
-    msghandler_t abc = request_msg("test1_fi", 0);
-    vprintk("sended\n");
-    join_msg(abc);
-    vprintk("responded\n");
+void proc1(server_t *serv) {
+    serv->printCon("hello world\n");
+    msghandler_t abc = serv->createRequest("test1_fi", 0);
+    serv->printCon("sended\n");
+    serv->joinRequest(abc);
+    serv->printCon("responded\n");
 
     while (1) {
-        char ky = getc();
-        vputc(ky);
+        //char ky = serv->inputCon();
+        //serv->teletypeCon(ky);
     }
 }
 
-void proc2() {
-    vprintk("foo bar\n");
+void proc2(server_t *serv) {
+    serv->printCon("foo bar\n");
     while (1) {
-        msghandler_t xd = findfirst_msg("test1_fi");
+        (*serv->structCon.color)+=2;
+        //*serv->structCon.row = 0;
+        //*serv->structCon.column = 0;
+        serv->printCon("foo bar");
+    }
+    /*while (1) {
+        msghandler_t xd = serv->findFirstRequest("test1_fi");
 
         if (xd != INVALID_MSG_ID) {
-            vprintk("recived\n");
-            respond_msg(xd, 0);
+            serv->printCon("recived\n");
+            serv->respondRequest(xd, 0);
         }
-    }
+    }*/
 }
 
-void render() {
-    abstract_t* fb =(abstract_t*)back_buffer;
-
-    for (abstract_t i = 0; i < (globInf->framebuffer_height*globInf->framebuffer_width); i++)
-    {
-        fb[i] = 0x00008888;
-    }
-
-    terminal_column = 0;
-    terminal_row = 0;
-
-    terminal_color = 0x9E;
-
-    printk("Welcome to the MilpaOS kernel, this is the multiple virtual terminal desktop worckspace\n");
-
-    for (int i = 0; i < 80*25; i++)
-    {
-        *((abssmall_t*)(&terminal_buffer[i]) + 1) = 0x1E;
-    }
-
-    for (int i = 0; i < MAX_BG_PROCESS; i++)
-    {
-        if (stats[i].free == 1) {
-            int x = 5 + (i * (ROWS_OF_VIRT + 3));
-            int y = 5;
-            // stats[i].virtus.buf = 15*7 buf
-
-            int w = ROWS_OF_VIRT;
-            int h = COLS_OF_VIRT;
-            
-            int vrt_i = 0;
-
-            for (int sy = (y - 1); sy < (y + h + 1); sy++)
-            {
-                for (int sx = (x - 1); sx < (x + w + 1); sx++)
-                {
-                    writeTermBuffer(sx, sy, 0x2020);
-                }
-            }
-
-            for (int sy = y; sy < (y + h); sy++)
-            {
-                for (int sx = x; sx < (x + w); sx++)
-                {
-                    writeTermBuffer(sx, sy, stats[i].virtus.buf[vrt_i]);
-                    vrt_i++;
-                }
-            }
-        }
-    }
-}
-
-void proc0() {
+void proc0(server_t *serv) {
     while (true) {
         //render();
     }
 }
+
+/*
+    printk(fil);
+    putc('\n');
+
+    popback();
+
+    abstract_t start_sect = Fat16ClusterToLBA(&inf16, bpb, fil->cluster_lo);
+
+    ata_read_sector(start_sect, s0);
+
+    printk(s0);
+
+    popback();*/
 
 void c_main(abstract_t magic, abstract_t mbi_addr) {
     multiboot_info_t *mbi =
@@ -119,6 +90,9 @@ void c_main(abstract_t magic, abstract_t mbi_addr) {
 
     init_msg_server();
 
+    server_t ks;
+    init_functions(&ks);
+
     idt_set_gate(32, (abstract_t)isr_pit, 0x10, 0x8E);
     idt_install();
 
@@ -131,10 +105,19 @@ void c_main(abstract_t magic, abstract_t mbi_addr) {
     }
 
     proalloc((abstract_t)&proc0);
-    proalloc((abstract_t)&proc1);
+    //proalloc((abstract_t)&proc1);
     proalloc((abstract_t)&proc2);
 
     init_mouse();
+
+    Fat16Info spc;
+    Fat16Dir* f = fs_get_file("SHELL   BIN", &spc);
+    abstract_t sect = Fat16ClusterToLBA(&spc, f->cluster_lo);
+
+    terminal_color = 0x07;
+
+    uabssmall_t* fa = fs_read_file(f, &spc);
+    proalloc((abstract_t)fa);
 
     init_pit(50);
 
